@@ -33,11 +33,11 @@
 
 ## 🎯 Overview
 
-**PolyHFT** is a professional-grade high-frequency trading bot designed for Polymarket, the world's largest prediction market platform. The bot implements five distinct trading strategies that capitalize on market inefficiencies, arbitrage opportunities, and liquidity provision rewards.
+**PolyHFT** is a professional-grade high-frequency trading bot designed for Polymarket, the world's largest prediction market platform. The bot implements six distinct trading strategies (including 1 beta) that capitalize on market inefficiencies, arbitrage opportunities, and liquidity provision rewards.
 
 ### Key Highlights
 
-- 🚀 **5 Advanced Strategies**: Hedging, micro-spreads, liquidity provision, arbitrage, and low-volume opportunities
+- 🚀 **6 Advanced Strategies** (1 beta): Hedging, micro-spreads, liquidity provision, arbitrage, low-volume opportunities, and continuous market-making [BETA]
 - 🛡️ **Enterprise Risk Management**: Multi-layered risk controls with position limits, stop-losses, and drawdown protection
 - 📊 **Paper Trading Mode**: Test strategies safely with simulated trading before risking real capital
 - ⚡ **High Performance**: Parallel market fetching, intelligent caching, and optimized API usage
@@ -122,6 +122,18 @@
 - Quick sell one side at 25¢, hold other at 95¢
 - Guaranteed profit: Sum of limit orders > 100¢
 - **Best for**: Small traders (whales can't access these markets)
+
+### 6. Continuous Market Making 📊 [BETA]
+**Band-based order management around market price**
+
+⚠️ **BETA STATUS**: This strategy is under evaluation. Use with caution and monitor closely.
+
+- Maintains orders in configurable bands around market price
+- Continuously adjusts orders as market moves (every second)
+- Intelligent cancellation logic for inner/outer/middle bands
+- Automatic order placement to maintain target amounts
+- **Best for**: Advanced traders comfortable with continuous order management
+- **Status**: Under evaluation - results may vary
 
 ---
 

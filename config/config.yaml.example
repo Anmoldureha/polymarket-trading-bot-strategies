@@ -12,7 +12,7 @@ use_exchange_adapter: true  # Use new exchange adapter pattern (recommended)
 
 # WebSocket settings
 websocket:
-  enabled: false  # Enable WebSocket for real-time data (experimental)
+  enabled: true  # Enable WebSocket for real-time data (recommended for market making and HFT strategies)
   
 # Rate limiting
 rate_limiting:
@@ -110,4 +110,17 @@ strategies:
     quick_sell_price: 0.25  # Price for side you want to sell quickly (25¢)
     min_profit_cents: 5.0  # Minimum profit required (5¢)
     preferred_side: "YES"  # Which side you prefer to hold (YES or NO)
+
+  # Strategy 6: Continuous Market Making (Band-Based Order Management) [BETA]
+  # Maintains orders in bands around market price, continuously adjusting as market moves
+  # Based on polymarket-marketmaking approach: https://github.com/elielieli909/polymarket-marketmaking
+  # ⚠️ BETA: This strategy is under evaluation. Use with caution and monitor closely.
+  market_making:
+    enabled: false  # Enable continuous market making
+    beta: true  # BETA STATUS: Under evaluation - use with caution
+    bands_file: "config/bands.json"  # Path to bands configuration file
+    update_interval: 1.0  # Update orders every N seconds (default: 1 second)
+    market_id: null  # Specific market ID to trade (null = scan all markets)
+    outcome: "YES"  # Outcome to trade (YES or NO)
+    min_order_size: 1.0  # Minimum order size in USDC
 

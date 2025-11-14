@@ -296,6 +296,65 @@ for market in markets:
 
 ---
 
+### 6. Continuous Market Making Strategy [BETA]
+
+⚠️ **BETA STATUS**: This strategy is under evaluation. Use with caution and monitor closely.
+
+**Concept**: Maintain orders in bands around market price, continuously adjusting as market moves.
+
+**Implementation**:
+```python
+# Pseudocode
+while running:
+    mid_price = get_market_price(market_id)
+    
+    # Cancel orders outside bands or exceeding maxAmount
+    for order in open_orders:
+        if order_outside_bands(order, mid_price, bands):
+            cancel_order(order)
+        elif total_in_band > max_amount:
+            cancel_excess_orders(band)
+    
+    # Place new orders to maintain avgAmount in each band
+    for band in bands:
+        if total_in_band < avg_amount:
+            place_order(market_id, band.avg_margin, size_needed)
+    
+    sleep(update_interval)
+```
+
+**Key Parameters**:
+- `bands_file`: Path to bands.json configuration
+- `update_interval`: Update frequency (default: 1 second)
+- `min_order_size`: Minimum order size
+- Band configuration: `minMargin`, `avgMargin`, `maxMargin`, `minAmount`, `avgAmount`, `maxAmount`
+
+**Why It Works**:
+- Provides continuous liquidity
+- Captures spreads by maintaining orders on both sides
+- Adapts to market movements automatically
+- Systematic approach vs opportunistic strategies
+
+**Risk Considerations**:
+- **Capital Requirements**: Needs capital for both buy and sell sides
+- **Market Movement**: Rapid price movements may cause frequent cancellations
+- **Inventory Risk**: May accumulate unwanted positions
+- **Beta Status**: Still under evaluation - results may vary
+
+**When to Use**:
+- Advanced traders comfortable with continuous order management
+- Sufficient capital for both sides
+- Willing to monitor and adjust parameters
+- **BETA**: Use in paper trading first, monitor closely
+
+**Beta Status**:
+- Currently under evaluation
+- Performance and parameters may change
+- Report issues and unexpected behavior
+- Not recommended for production use until evaluation complete
+
+---
+
 ## Risk Management System
 
 ### Risk Manager Architecture
@@ -692,13 +751,16 @@ Potential improvements:
 
 PolyHFT is a sophisticated trading bot with:
 
-- **5 distinct strategies** for various market conditions
+- **6 distinct strategies** (including 1 beta) for various market conditions
 - **Comprehensive risk management** for capital protection
 - **High performance** through caching and parallelization
 - **Extensible architecture** for easy additions
 - **Production-ready** features like logging and monitoring
+- **WebSocket support** for real-time data updates
 
 The bot is designed to be both powerful and safe, with extensive risk controls and paper trading support.
+
+**Note**: The Continuous Market Making strategy is currently in BETA and under evaluation. Use with caution.
 
 ---
 

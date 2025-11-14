@@ -14,25 +14,31 @@ logger = setup_logger(__name__)
 class PolymarketWebSocketClient:
     """WebSocket client for real-time Polymarket orderbook updates"""
     
-    WS_URL = "wss://clob.polymarket.com/ws"
+    # Polymarket WebSocket endpoint from official documentation
+    # https://docs.polymarket.com/developers/CLOB/endpoints
+    WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/"
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, private_key: Optional[str] = None):
         """
         Initialize WebSocket client.
         
         Args:
-            api_key: Polymarket API key (optional)
+            api_key: Polymarket API key (optional, required for USER channel)
+            private_key: Polymarket private key (optional, required for USER channel)
         """
         self.api_key = api_key
+        self.private_key = private_key
         self.ws = None
         self.connected = False
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 10
         self.reconnect_delay = 5.0
         
-        # Subscriptions
+        # Subscriptions - track asset_ids for MARKET channel
         self.subscriptions: Dict[str, set] = {}  # market_id -> set of outcomes
+        self.asset_id_map: Dict[str, tuple] = {}  # asset_id -> (market_id, outcome)
         self.orderbook_cache: Dict[str, Dict] = {}  # (market_id, outcome) -> orderbook
+        self.pending_subscriptions: List[tuple] = []  # List of (market_id, outcome) to subscribe
         
         # Callbacks
         self.on_orderbook_update: Optional[Callable] = None
@@ -45,23 +51,34 @@ class PolymarketWebSocketClient:
         self.running = False
     
     def _on_message(self, ws, message):
-        """Handle incoming WebSocket messages"""
+        """Handle incoming WebSocket messages from Polymarket MARKET channel"""
         try:
             data = json.loads(message)
             
-            # Handle different message types
-            if 'type' in data:
-                if data['type'] == 'orderbook':
+            # Handle Polymarket MARKET channel messages
+            # Messages can be orderbook updates, trades, or other market data
+            if isinstance(data, dict):
+                # Check for orderbook data structure
+                if 'bids' in data and 'asks' in data:
+                    # This is an orderbook update
                     self._handle_orderbook_update(data)
-                elif data['type'] == 'error':
-                    logger.error(f"WebSocket error: {data.get('message', 'Unknown error')}")
-                    if self.on_error:
-                        self.on_error(data)
-                elif data['type'] == 'subscribed':
-                    logger.debug(f"Subscribed to: {data.get('channel', 'unknown')}")
-                elif data['type'] == 'pong':
-                    # Heartbeat response
-                    pass
+                elif 'type' in data:
+                    msg_type = data.get('type')
+                    if msg_type == 'error':
+                        logger.error(f"WebSocket error: {data.get('message', 'Unknown error')}")
+                        if self.on_error:
+                            self.on_error(data)
+                    elif msg_type == 'subscribed' or msg_type == 'SUBSCRIBED':
+                        logger.debug(f"Subscription confirmed: {data.get('channel', 'unknown')}")
+                    elif msg_type == 'orderbook' or msg_type == 'ORDERBOOK':
+                        self._handle_orderbook_update(data)
+                    elif msg_type == 'trade' or msg_type == 'TRADE':
+                        # Handle trade updates if needed
+                        logger.debug(f"Trade update received")
+                else:
+                    # Try to handle as orderbook update
+                    if 'bids' in data or 'asks' in data:
+                        self._handle_orderbook_update(data)
             
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse WebSocket message: {e}")
@@ -69,14 +86,24 @@ class PolymarketWebSocketClient:
             logger.error(f"Error handling WebSocket message: {e}")
     
     def _handle_orderbook_update(self, data: Dict) -> None:
-        """Handle orderbook update message"""
+        """Handle orderbook update message from MARKET channel"""
         try:
-            market_id = data.get('market')
+            # Polymarket MARKET channel messages may include asset_id or token_id
+            asset_id = data.get('asset_id') or data.get('token_id') or data.get('tokenId')
+            market_id = data.get('market') or data.get('market_id')
             outcome = data.get('outcome', 'YES')
+            
             bids = data.get('bids', [])
             asks = data.get('asks', [])
             
+            # Try to map asset_id back to market_id/outcome if we have it
+            if asset_id and asset_id in self.asset_id_map:
+                market_id, outcome = self.asset_id_map[asset_id]
+            
+            # If we still don't have market_id, try to find it from subscriptions
             if not market_id:
+                # For now, use a generic key - in production, we'd maintain proper mapping
+                logger.debug(f"Orderbook update received but market_id not found, using asset_id: {asset_id}")
                 return
             
             key = (market_id, outcome)
@@ -119,10 +146,31 @@ class PolymarketWebSocketClient:
             self._reconnect()
     
     def _on_open(self, ws):
-        """Handle WebSocket open"""
+        """Handle WebSocket open - send initial subscription for MARKET channel"""
         logger.info("WebSocket connected")
         self.connected = True
         self.reconnect_attempts = 0
+        
+        # Send MARKET channel subscription
+        # For MARKET channel, we need asset_ids (token IDs)
+        # For now, subscribe with empty array - will add asset_ids as we subscribe to markets
+        try:
+            subscribe_msg = {
+                "type": "MARKET",
+                "asset_ids": []
+            }
+            
+            # Add auth if available (for USER channel, not needed for MARKET)
+            # MARKET channel doesn't require auth, but we can include it if available
+            if self.api_key:
+                # Note: Auth format may need adjustment based on Polymarket docs
+                # For MARKET channel, auth is typically not required
+                pass
+            
+            ws.send(json.dumps(subscribe_msg))
+            logger.debug("Subscribed to MARKET channel")
+        except Exception as e:
+            logger.error(f"Failed to send MARKET channel subscription: {e}")
         
         # Re-subscribe to all previous subscriptions
         self._resubscribe_all()
@@ -161,20 +209,42 @@ class PolymarketWebSocketClient:
                     self._subscribe(market_id, outcome)
     
     def _subscribe(self, market_id: str, outcome: str = "YES") -> None:
-        """Subscribe to orderbook updates for a market"""
+        """
+        Subscribe to orderbook updates for a market.
+        Note: This requires asset_id (token ID) which we'll need to fetch from market data.
+        For now, we'll queue the subscription and try to resolve asset_id later.
+        """
         if not self.connected or not self.ws:
+            # Queue for later
+            self.pending_subscriptions.append((market_id, outcome))
             return
         
         try:
-            subscribe_msg = {
-                'type': 'subscribe',
-                'channel': 'orderbook',
-                'market': market_id,
-                'outcome': outcome
-            }
+            # For MARKET channel, we need asset_ids (token IDs)
+            # The asset_id is typically the token ID for the outcome
+            # We'll need to get this from market data or use market_id as fallback
+            # For now, use a simplified approach - try to construct asset_id
+            # In production, you'd fetch the actual token ID from market data
             
-            self.ws.send(json.dumps(subscribe_msg))
-            logger.debug(f"Subscribed to {market_id} {outcome}")
+            # Note: Polymarket MARKET channel uses asset_ids array
+            # We need to send updated subscription with all asset_ids we want to track
+            asset_ids = []
+            
+            # Try to get asset_id from cache or use market_id as identifier
+            # In a full implementation, we'd fetch token IDs from market data
+            # For now, we'll use market_id + outcome as a key and let the adapter handle it
+            
+            # Store subscription for later resolution
+            key = (market_id, outcome)
+            with self.lock:
+                if market_id not in self.subscriptions:
+                    self.subscriptions[market_id] = set()
+                self.subscriptions[market_id].add(outcome)
+            
+            logger.debug(f"Queued subscription for {market_id} {outcome} (asset_id resolution needed)")
+            
+            # Note: Actual subscription will happen when we have asset_ids
+            # For now, the REST fallback will handle data retrieval
         
         except Exception as e:
             logger.error(f"Failed to subscribe to {market_id} {outcome}: {e}")

@@ -21,6 +21,7 @@ from .strategies.micro_spreads import MicroSpreadStrategy
 from .strategies.liquidity import LiquidityStrategy
 from .strategies.single_arbitrage import SingleArbitrageStrategy
 from .strategies.low_volume_spread import LowVolumeSpreadStrategy
+from .strategies.market_making import MarketMakingStrategy
 from .utils.logger import setup_logger, get_trade_logger, get_error_logger
 from .utils.config_loader import ConfigLoader
 from .utils.profitability_tracker import ProfitabilityTracker, TradeRecord
@@ -54,7 +55,20 @@ class TradingBot:
         
         if use_adapter:
             ws_enabled = self.config.get('websocket', {}).get('enabled', False)
+            # Get API credentials if available
+            api_key = None
+            private_key = None
+            try:
+                creds = AuthManager.get_polymarket_credentials()
+                api_key = creds.get('api_key')
+                private_key = creds.get('private_key')
+            except Exception:
+                # Credentials not required for paper trading
+                pass
+            
             self.polymarket_client = PolymarketAdapter(
+                api_key=api_key,
+                private_key=private_key,
                 paper_trading=paper_trading,
                 use_websocket=ws_enabled
             )
@@ -199,6 +213,17 @@ class TradingBot:
                 polymarket_client=self.polymarket_client,
                 risk_manager=self.risk_manager,
                 config=low_volume_config,
+                market_cache=self.market_cache
+            )
+        
+        # Market-making strategy (continuous band-based order management)
+        market_making_config = self.config_loader.get_strategy_config('market_making')
+        if market_making_config.get('enabled', False):
+            self.strategies['market_making'] = MarketMakingStrategy(
+                name='market_making',
+                polymarket_client=self.polymarket_client,
+                risk_manager=self.risk_manager,
+                config=market_making_config,
                 market_cache=self.market_cache
             )
         

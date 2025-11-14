@@ -52,7 +52,10 @@ class PolymarketAdapter(BaseExchange):
             return True
         
         try:
-            self.ws_client = PolymarketWebSocketClient(api_key=self.rest_client.api_key)
+            self.ws_client = PolymarketWebSocketClient(
+                api_key=self.rest_client.api_key,
+                private_key=getattr(self.rest_client, 'private_key', None)
+            )
             
             def on_orderbook_update(market_id, outcome, bids, asks):
                 logger.debug(f"Orderbook update: {market_id} {outcome}")
@@ -61,10 +64,12 @@ class PolymarketAdapter(BaseExchange):
             
             if self.ws_client.connect():
                 self.use_websocket = True
-                logger.info("WebSocket enabled for real-time data")
+                logger.info("✅ WebSocket enabled for real-time data")
                 return True
             else:
-                logger.warning("Failed to connect WebSocket, using REST only")
+                logger.warning("⚠️  Failed to connect WebSocket, using REST only (this is OK for paper trading)")
+                logger.info("   WebSocket will be used automatically when connection is available")
+                # Don't fail - REST fallback is fine
                 return False
         except Exception as e:
             logger.error(f"Error enabling WebSocket: {e}")

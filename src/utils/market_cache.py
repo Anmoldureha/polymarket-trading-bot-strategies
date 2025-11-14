@@ -123,6 +123,7 @@ class MarketCache:
     def get_price(self, market_id: str, outcome: str) -> Optional[Dict]:
         """
         Get price for a single market/outcome (uses cache if available).
+        Prefers WebSocket cache when available.
         
         Args:
             market_id: Market identifier
@@ -134,18 +135,39 @@ class MarketCache:
         cache_key = f"{market_id}_{outcome}"
         current_time = time.time()
         
+        # Try WebSocket cache first if available
+        if hasattr(self.polymarket_client, 'ws_client') and self.polymarket_client.ws_client:
+            ws_cache = self.polymarket_client.ws_client.get_orderbook(market_id, outcome)
+            if ws_cache:
+                # Convert orderbook to price format
+                bids = ws_cache.get('bids', [])
+                asks = ws_cache.get('asks', [])
+                if bids and asks:
+                    best_bid = float(bids[0].get('price', 0)) if isinstance(bids[0], dict) else float(bids[0][0]) if isinstance(bids[0], list) else None
+                    best_ask = float(asks[0].get('price', 0)) if isinstance(asks[0], dict) else float(asks[0][0]) if isinstance(asks[0], list) else None
+                    if best_bid and best_ask:
+                        prices = {'bid': best_bid, 'ask': best_ask, 'spread': best_ask - best_bid}
+                        self._price_cache[cache_key] = prices
+                        self._price_cache_timestamp[cache_key] = current_time
+                        return prices
+        
         # Check cache first
         if (cache_key in self._price_cache and 
             cache_key in self._price_cache_timestamp and
             current_time - self._price_cache_timestamp[cache_key] < self.cache_ttl):
             return self._price_cache[cache_key]
         
-        # Fetch fresh price
+        # Fetch fresh price (will use WebSocket if enabled via adapter)
         try:
             prices = self.polymarket_client.get_best_price(market_id, outcome=outcome)
             if prices:
                 self._price_cache[cache_key] = prices
                 self._price_cache_timestamp[cache_key] = current_time
+                
+                # Subscribe to WebSocket if available
+                if hasattr(self.polymarket_client, 'ws_client') and self.polymarket_client.ws_client:
+                    if self.polymarket_client.ws_client.is_connected():
+                        self.polymarket_client.ws_client.subscribe_orderbook(market_id, outcome)
             return prices
         except Exception as e:
             logger.debug(f"Error fetching price for {market_id} {outcome}: {e}")
