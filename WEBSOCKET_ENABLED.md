@@ -41,9 +41,13 @@ websocket:
 
 ### 5. WebSocket Client (`src/api/polymarket_websocket.py`)
 
-- **Correct WebSocket URL**: `wss://ws-subscriptions-clob.polymarket.com/ws/` (from Polymarket official docs)
+- **Correct WebSocket URL**: `wss://ws-subscriptions-clob.polymarket.com/ws/market` (from Polymarket docs)
 - **MARKET Channel**: Subscribes to MARKET channel for orderbook updates
-- **Authentication**: MARKET channel doesn't require auth (USER channel does)
+- **Smart Subscription**: Only subscribes when we have actual asset_ids (not empty array)
+- **Asset ID Resolution**: Fetches token IDs from market data when subscribing
+- **Dynamic Updates**: Updates subscription as new asset_ids are added
+- **Message Handling**: Handles `book`, `price_change`, `tick_size_change`, `last_trade_price` events
+- **Based on**: Implementation inspired by [poly-websockets](https://github.com/nevuamarkets/poly-websockets)
 - Automatic reconnection logic
 - Orderbook caching and subscription management
 
@@ -144,9 +148,12 @@ python test_market_making.py
 
 ## WebSocket Endpoint
 
-**Correct URL**: `wss://ws-subscriptions-clob.polymarket.com/ws/`
+**Correct URL**: `wss://ws-subscriptions-clob.polymarket.com/ws/market`
 
-**Source**: [Polymarket CLOB Endpoints Documentation](https://docs.polymarket.com/developers/CLOB/endpoints)
+**Source**: 
+- [Polymarket CLOB Endpoints Documentation](https://docs.polymarket.com/developers/CLOB/endpoints)
+- [Polymarket MARKET Channel Documentation](https://docs.polymarket.com/developers/CLOB/websocket/market-channel)
+- Implementation inspired by [poly-websockets](https://github.com/nevuamarkets/poly-websockets)
 
 ### Channel Types
 
@@ -156,10 +163,12 @@ Polymarket WebSocket supports two channels:
    - Uses `asset_ids` array for subscriptions
    - No authentication required
    - Used by PolyHFT for orderbook updates
+   - Endpoint: `/ws/market`
 
 2. **USER Channel**: For user-specific data (orders, positions)
    - Uses `markets` array (condition IDs)
    - Requires authentication
+   - Endpoint: `/ws/user`
    - Not currently used by PolyHFT
 
 ### Subscription Format
@@ -168,11 +177,33 @@ For MARKET channel:
 ```json
 {
   "type": "MARKET",
-  "asset_ids": []
+  "asset_ids": ["token-id-1", "token-id-2", ...]
 }
 ```
 
-**Note**: Asset IDs (token IDs) are required for full functionality. Current implementation uses REST fallback when asset IDs are not available.
+**Important**: 
+- Do NOT subscribe with empty `asset_ids` array - this causes connection to close
+- Asset IDs (token IDs) are fetched from market data when subscribing
+- Subscription is updated dynamically as new markets are tracked
+- Based on poly-websockets implementation approach
+
+### Message Types
+
+The MARKET channel sends different event types:
+
+1. **`book`**: Full orderbook snapshot
+   - Emitted on first subscription and when trades affect the book
+   - Contains `bids` and `asks` arrays with `{price, size}` objects
+
+2. **`price_change`**: Incremental orderbook updates
+   - Emitted when orders are placed or cancelled
+   - Contains `price_changes` array with updated price levels
+
+3. **`tick_size_change`**: Market tick size changes
+   - Emitted when minimum tick size changes (price > 0.96 or < 0.04)
+
+4. **`last_trade_price`**: Trade execution events
+   - Emitted when maker and taker orders match
 
 ## Configuration
 
@@ -243,9 +274,20 @@ Reconnecting in 5.0s (attempt 1/10)
 
 **Solutions:**
 1. ✅ **This is OK!** REST fallback ensures bot works
-2. Verify WebSocket URL in `polymarket_websocket.py`
-3. Check if API credentials required
-4. Verify network connectivity
+2. Verify WebSocket URL is `wss://ws-subscriptions-clob.polymarket.com/ws/market`
+3. Check network connectivity
+4. MARKET channel doesn't require authentication
+
+### WebSocket Connects But Disconnects Immediately
+
+**Symptoms:**
+- "WebSocket connected" followed by "Connection to remote host was lost"
+
+**Solutions:**
+1. ✅ **Fixed!** We now only subscribe when we have asset_ids
+2. Previous issue was subscribing with empty `asset_ids` array
+3. Current implementation waits for asset_ids before subscribing
+4. Connection should stay stable now
 
 ### No Real-Time Updates
 
@@ -253,9 +295,10 @@ Reconnecting in 5.0s (attempt 1/10)
 - WebSocket connected but no updates received
 
 **Solutions:**
-1. Check if markets are subscribed
-2. Verify WebSocket message format
-3. Check logs for subscription confirmations
+1. Asset IDs are fetched from market data when subscribing
+2. Check if markets have been queried (triggers subscription)
+3. Verify WebSocket message format in logs
+4. Check for `book` or `price_change` events in logs
 
 ### High API Usage
 
@@ -263,9 +306,10 @@ Reconnecting in 5.0s (attempt 1/10)
 - Still seeing many REST API calls
 
 **Solutions:**
-1. Verify WebSocket is actually connected
+1. Verify WebSocket is actually connected (`use_websocket: true`)
 2. Check `use_websocket` flag in adapter
 3. Ensure strategies are using `MarketCache`
+4. WebSocket subscriptions require asset_ids - if not available, REST is used
 
 ## Future Enhancements
 
