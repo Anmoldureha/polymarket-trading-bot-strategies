@@ -16,7 +16,8 @@ class PolymarketWebSocketClient:
     
     # Polymarket WebSocket endpoint from official documentation
     # https://docs.polymarket.com/developers/CLOB/endpoints
-    WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/"
+    # Error message indicates channels are '/ws/user' and '/ws/market'
+    WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
     
     def __init__(self, api_key: Optional[str] = None, private_key: Optional[str] = None):
         """
