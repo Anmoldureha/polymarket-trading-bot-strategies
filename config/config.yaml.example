@@ -1,0 +1,113 @@
+# PolyHFT Trading Bot Configuration
+# Copy this file to config.yaml and fill in your credentials
+# Or use environment variables (recommended for security)
+
+# General settings
+paper_trading: true  # Set to false for live trading
+polling_interval: 5.0  # Seconds between trading iterations
+state_file: "bot_state.json"  # File to save/restore bot state
+run_health_check_on_startup: false  # Run API health check on bot startup (set to true to verify data)
+verbose_validation: false  # Enable verbose market data validation logging
+use_exchange_adapter: true  # Use new exchange adapter pattern (recommended)
+
+# WebSocket settings
+websocket:
+  enabled: false  # Enable WebSocket for real-time data (experimental)
+  
+# Rate limiting
+rate_limiting:
+  max_calls: 100  # Maximum API calls
+  period: 60.0  # Time period in seconds
+  backoff_factor: 2.0  # Exponential backoff multiplier
+  max_backoff: 300.0  # Maximum backoff time in seconds
+
+# Risk Management
+risk:
+  initial_capital: 100.0  # Starting capital in USD
+  max_position_size: 10.0  # Maximum size per position
+  max_total_exposure: 100.0  # Maximum total exposure across all positions
+  max_per_market_exposure: 20.0  # Maximum exposure per market
+  max_per_strategy_exposure: 50.0  # Maximum exposure per strategy
+  max_drawdown_pct: 20.0  # Maximum drawdown percentage before stopping
+  max_open_positions: 10  # Maximum number of open positions
+  stop_loss_pct: 10.0  # Stop loss percentage per position
+
+# Telegram Notifications
+telegram:
+  bot_token: null  # Bot token from BotFather (or set via TELEGRAM_BOT_TOKEN env var)
+  chat_id: null  # Will be auto-detected when you send a message to the bot
+
+# API Configuration (can be overridden by environment variables)
+api:
+  polymarket:
+    base_url: "https://clob.polymarket.com"
+    # api_key and private_key loaded from environment variables
+    # Set POLYMARKET_API_KEY and POLYMARKET_PRIVATE_KEY in .env file
+  perpdex:
+    base_url: "https://api.hyperliquid.xyz"  # Using Hyperliquid as Perpdex
+    wallet_address: null  # API Wallet Address (or set via HYPERLIQUID_WALLET_ADDRESS env var)
+    private_key: null  # Private Key (or set via HYPERLIQUID_PRIVATE_KEY env var)
+    # Note: These can also be set via HYPERLIQUID_WALLET_ADDRESS and HYPERLIQUID_PRIVATE_KEY env vars
+
+# Strategy Configurations
+
+# Strategy 1: Hedging Positions
+strategies:
+  hedging:
+    enabled: false  # Requires Perpdex API access
+    min_profit_target_pct: 100.0  # Minimum profit target (100%)
+    max_profit_target_pct: 150.0  # Maximum profit target (150%)
+    btc_market_keywords:
+      - "bitcoin"
+      - "btc"
+      - "crypto"
+    position_size: 100.0
+
+  # Strategy 2: Micro-Spread Farming
+  micro_spreads:
+    enabled: true
+    min_buy_price: 0.05  # Minimum buy price ($0.05)
+    max_buy_price: 0.10  # Maximum buy price ($0.10)
+    min_profit_pct: 20.0  # Minimum profit percentage (20%)
+    target_profit_pct: 120.0  # Target profit percentage (120%)
+    position_size: 10.0  # Position size per trade
+    max_spread_pct: 5.0  # Maximum spread to enter (5%)
+
+  # Strategy 3: Liquidity Provision (Enhanced Market Making)
+  liquidity:
+    enabled: true
+    min_spread_pct: 2.0  # Minimum spread to enter (2%)
+    max_spread_pct: 10.0  # Maximum spread to consider (10%)
+    position_size: 50.0  # Position size per side
+    tighten_pct: 50.0  # Tighten spread by this percentage (50%)
+    max_reward_per_market: 50.0  # Maximum reward per market ($50)
+    # Enhanced market making parameters
+    price_chase_threshold: 0.3  # Chase threshold percentage (30%)
+    bid_offset: 0.0  # Bid offset from top bid (USDT)
+    ask_offset: 0.0  # Ask offset from top ask (USDT)
+    refresh_interval_ms: 1500  # Refresh interval in milliseconds
+    max_close_slippage_pct: 0.05  # Maximum slippage when closing (5%)
+
+  # Strategy 4: Single-Market Arbitrage
+  single_arbitrage:
+    enabled: true
+    max_total_price: 0.99  # Maximum total price for YES+NO ($0.99)
+    min_profit_pct: 1.0  # Minimum profit percentage (1%)
+    position_size: 100.0  # Position size per outcome
+    require_clear_resolution: true  # Only trade markets with clear resolution rules
+
+  # Strategy 5: Low-Volume High-Spread (Split Orders)
+  # Perfect for small traders - whales can't access these markets
+  # Find newly launched markets with <$10k volume and >10¢ spreads
+  # Use split orders to buy YES+NO for $1, then place strategic limit orders
+  low_volume_spread:
+    enabled: true
+    max_volume_usd: 10000.0  # Maximum market volume ($10k) - whales won't touch these
+    min_spread_cents: 10.0  # Minimum spread (10¢) - ensures good profit opportunity
+    max_market_age_days: 7  # Only trade markets launched in last 7 days
+    split_amount: 1.0  # Amount to split (1 USDC = 1 YES + 1 NO)
+    comfortable_side_price: 0.95  # Price for side you're comfortable holding (95¢)
+    quick_sell_price: 0.25  # Price for side you want to sell quickly (25¢)
+    min_profit_cents: 5.0  # Minimum profit required (5¢)
+    preferred_side: "YES"  # Which side you prefer to hold (YES or NO)
+
