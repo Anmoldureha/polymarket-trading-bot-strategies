@@ -313,10 +313,11 @@ Reconnecting in 5.0s (attempt 1/10)
 
 ## Future Enhancements
 
-1. **WebSocket Endpoint Verification**: Confirm correct URL with Polymarket
-2. **Subscription Management**: Better handling of many market subscriptions
+1. ✅ **WebSocket Endpoint**: Verified and working (`/ws/market`)
+2. ✅ **Subscription Management**: Implemented with asset_id resolution
 3. **WebSocket Metrics**: Track connection uptime and message rates
 4. **Selective Subscriptions**: Subscribe only to actively traded markets
+5. **Price Change Merging**: Implement incremental orderbook updates from `price_change` events
 
 ## Summary
 
