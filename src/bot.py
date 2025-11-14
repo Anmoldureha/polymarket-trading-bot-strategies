@@ -1,5 +1,6 @@
 """Main bot orchestrator"""
 
+import os
 import time
 import signal
 import sys
@@ -124,7 +125,11 @@ class TradingBot:
         
         # Initialize Telegram notifier
         telegram_config = self.config.get('telegram', {})
-        telegram_token = telegram_config.get('bot_token') or self.config.get('telegram_bot_token')
+        telegram_token = (
+            os.getenv('TELEGRAM_BOT_TOKEN') or 
+            telegram_config.get('bot_token') or 
+            self.config.get('telegram_bot_token')
+        )
         telegram_chat_id = telegram_config.get('chat_id')
         self.telegram = TelegramNotifier(telegram_token, telegram_chat_id) if telegram_token else None
         
