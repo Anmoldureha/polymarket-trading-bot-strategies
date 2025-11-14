@@ -167,7 +167,9 @@ class MarketCache:
                 # Subscribe to WebSocket if available
                 if hasattr(self.polymarket_client, 'ws_client') and self.polymarket_client.ws_client:
                     if self.polymarket_client.ws_client.is_connected():
-                        self.polymarket_client.ws_client.subscribe_orderbook(market_id, outcome)
+                        # Pass rest_client to get asset_ids for subscription
+                        rest_client = getattr(self.polymarket_client, 'rest_client', None)
+                        self.polymarket_client.ws_client.subscribe_orderbook(market_id, outcome, rest_client=rest_client)
             return prices
         except Exception as e:
             logger.debug(f"Error fetching price for {market_id} {outcome}: {e}")

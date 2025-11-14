@@ -40,6 +40,7 @@ class PolymarketWebSocketClient:
         self.asset_id_map: Dict[str, tuple] = {}  # asset_id -> (market_id, outcome)
         self.orderbook_cache: Dict[str, Dict] = {}  # (market_id, outcome) -> orderbook
         self.pending_subscriptions: List[tuple] = []  # List of (market_id, outcome) to subscribe
+        self.rest_client = None  # Will be set by adapter to fetch market data
         
         # Callbacks
         self.on_orderbook_update: Optional[Callable] = None
@@ -196,35 +197,24 @@ class PolymarketWebSocketClient:
         """
         Handle WebSocket open - send initial subscription for MARKET channel.
         
-        According to Polymarket docs, we subscribe to MARKET channel with:
-        - type: "MARKET"
-        - asset_ids: array of token IDs (can be empty initially)
+        According to Polymarket docs and poly-websockets implementation:
+        - Connect to /ws/market endpoint
+        - Subscribe with {"type": "MARKET", "asset_ids": [...]}
+        - Only subscribe when we have actual asset_ids (not empty array)
         """
         logger.info("WebSocket connected")
         self.connected = True
         self.reconnect_attempts = 0
         
-        # Send MARKET channel subscription
-        # According to WSS overview: https://docs.polymarket.com/developers/CLOB/websocket/wss-overview
-        # MARKET channel uses asset_ids array
-        try:
-            # Get asset_ids from pending subscriptions if any
-            asset_ids = []
-            # TODO: Resolve market_id/outcome to asset_ids from market data
-            # For now, subscribe with empty array - we'll get book messages for subscribed assets
-            
-            subscribe_msg = {
-                "type": "MARKET",
-                "asset_ids": asset_ids
-            }
-            
-            ws.send(json.dumps(subscribe_msg))
-            logger.info("Subscribed to MARKET channel")
-        except Exception as e:
-            logger.error(f"Failed to send MARKET channel subscription: {e}")
+        # Don't subscribe with empty array - wait until we have asset_ids
+        # This prevents the server from closing the connection
+        # We'll subscribe when we have actual asset_ids to track
         
-        # Re-subscribe to all previous subscriptions
-        self._resubscribe_all()
+        # Process pending subscriptions that now have asset_ids resolved
+        if self.rest_client:
+            self._process_pending_subscriptions()
+            # Also resubscribe to existing subscriptions
+            self._resubscribe_all(self.rest_client)
         
         if self.on_connect:
             try:
@@ -252,18 +242,101 @@ class PolymarketWebSocketClient:
             if self.running:
                 self._reconnect()
     
-    def _resubscribe_all(self) -> None:
+    def _process_pending_subscriptions(self) -> None:
+        """Process pending subscriptions that need asset_id resolution"""
+        if not self.rest_client:
+            return
+        
+        pending = []
+        with self.lock:
+            pending = list(self.pending_subscriptions)
+            self.pending_subscriptions.clear()
+        
+        for market_id, outcome in pending:
+            self._subscribe(market_id, outcome, self.rest_client)
+    
+    def _resubscribe_all(self, rest_client=None) -> None:
         """Re-subscribe to all previous subscriptions"""
         with self.lock:
-            for market_id, outcomes in self.subscriptions.items():
-                for outcome in outcomes:
-                    self._subscribe(market_id, outcome)
+            subscriptions_copy = dict(self.subscriptions)
+        
+        for market_id, outcomes in subscriptions_copy.items():
+            for outcome in outcomes:
+                self._subscribe(market_id, outcome, rest_client)
     
-    def _subscribe(self, market_id: str, outcome: str = "YES") -> None:
+    def _get_asset_id_from_market(self, market_id: str, outcome: str, rest_client=None) -> Optional[str]:
+        """
+        Get asset_id (token ID) from market data.
+        
+        Args:
+            market_id: Market identifier
+            outcome: Outcome (YES, NO, or token ID)
+            rest_client: REST client to fetch market data (optional)
+            
+        Returns:
+            Asset ID (token ID) or None if not found
+        """
+        # If outcome is already a token ID (long numeric string), use it
+        if outcome and len(outcome) > 20 and outcome.replace('.', '').isdigit():
+            return outcome
+        
+        # Try to get from market data if rest_client provided
+        if rest_client:
+            try:
+                # Try get_market method (adapter) or direct API call
+                if hasattr(rest_client, 'get_market'):
+                    market_data = rest_client.get_market(market_id)
+                elif hasattr(rest_client, '_request'):
+                    # Direct REST client - use API endpoint
+                    endpoint = f"/markets/{market_id}"
+                    market_data = rest_client._request('GET', endpoint)
+                else:
+                    market_data = None
+                
+                if market_data:
+                    outcomes = market_data.get('outcomes', [])
+                    for out in outcomes:
+                        if isinstance(out, dict):
+                            out_name = out.get('name', '').upper()
+                            token_id = out.get('token_id') or out.get('tokenId') or out.get('clobTokenId')
+                            if out_name == outcome.upper() and token_id:
+                                return token_id
+            except Exception as e:
+                logger.debug(f"Error fetching market data for {market_id}: {e}")
+        
+        return None
+    
+    def _update_subscription(self, asset_ids: List[str]) -> None:
+        """
+        Update WebSocket subscription with new asset_ids.
+        Based on poly-websockets approach - send updated subscription message.
+        
+        Args:
+            asset_ids: List of asset IDs to subscribe to
+        """
+        if not self.connected or not self.ws:
+            return
+        
+        try:
+            subscribe_msg = {
+                "type": "MARKET",
+                "asset_ids": asset_ids
+            }
+            
+            self.ws.send(json.dumps(subscribe_msg))
+            logger.debug(f"Updated MARKET channel subscription with {len(asset_ids)} asset_ids")
+        except Exception as e:
+            logger.error(f"Failed to update subscription: {e}")
+    
+    def _subscribe(self, market_id: str, outcome: str = "YES", rest_client=None) -> None:
         """
         Subscribe to orderbook updates for a market.
-        Note: This requires asset_id (token ID) which we'll need to fetch from market data.
-        For now, we'll queue the subscription and try to resolve asset_id later.
+        Based on poly-websockets approach - requires actual asset_ids.
+        
+        Args:
+            market_id: Market identifier
+            outcome: Outcome type (YES, NO, etc.)
+            rest_client: REST client to fetch market data (optional)
         """
         if not self.connected or not self.ws:
             # Queue for later
@@ -271,31 +344,29 @@ class PolymarketWebSocketClient:
             return
         
         try:
-            # For MARKET channel, we need asset_ids (token IDs)
-            # The asset_id is typically the token ID for the outcome
-            # We'll need to get this from market data or use market_id as fallback
-            # For now, use a simplified approach - try to construct asset_id
-            # In production, you'd fetch the actual token ID from market data
+            # Get asset_id from market data
+            asset_id = self._get_asset_id_from_market(market_id, outcome, rest_client)
             
-            # Note: Polymarket MARKET channel uses asset_ids array
-            # We need to send updated subscription with all asset_ids we want to track
-            asset_ids = []
+            if not asset_id:
+                # Can't subscribe without asset_id - queue for later
+                logger.debug(f"Cannot subscribe to {market_id} {outcome} - asset_id not found, using REST fallback")
+                self.pending_subscriptions.append((market_id, outcome))
+                return
             
-            # Try to get asset_id from cache or use market_id as identifier
-            # In a full implementation, we'd fetch token IDs from market data
-            # For now, we'll use market_id + outcome as a key and let the adapter handle it
-            
-            # Store subscription for later resolution
-            key = (market_id, outcome)
+            # Store mapping
             with self.lock:
+                self.asset_id_map[asset_id] = (market_id, outcome)
                 if market_id not in self.subscriptions:
                     self.subscriptions[market_id] = set()
                 self.subscriptions[market_id].add(outcome)
             
-            logger.debug(f"Queued subscription for {market_id} {outcome} (asset_id resolution needed)")
+            # Get all current asset_ids we're tracking
+            current_asset_ids = list(self.asset_id_map.keys())
             
-            # Note: Actual subscription will happen when we have asset_ids
-            # For now, the REST fallback will handle data retrieval
+            # Update subscription with all asset_ids
+            self._update_subscription(current_asset_ids)
+            
+            logger.debug(f"Subscribed to {market_id} {outcome} (asset_id: {asset_id[:20]}...)")
         
         except Exception as e:
             logger.error(f"Failed to subscribe to {market_id} {outcome}: {e}")
@@ -343,13 +414,14 @@ class PolymarketWebSocketClient:
             self.connected = False
             return False
     
-    def subscribe_orderbook(self, market_id: str, outcome: str = "YES") -> None:
+    def subscribe_orderbook(self, market_id: str, outcome: str = "YES", rest_client=None) -> None:
         """
         Subscribe to orderbook updates for a market.
         
         Args:
             market_id: Market identifier
             outcome: Outcome type (YES, NO, etc.)
+            rest_client: REST client to fetch market data (optional, needed to get asset_id)
         """
         key = (market_id, outcome)
         
@@ -359,9 +431,10 @@ class PolymarketWebSocketClient:
             self.subscriptions[market_id].add(outcome)
         
         if self.connected:
-            self._subscribe(market_id, outcome)
+            self._subscribe(market_id, outcome, rest_client)
         else:
             # Will subscribe on connect
+            self.pending_subscriptions.append((market_id, outcome))
             logger.debug(f"Queued subscription for {market_id} {outcome}")
     
     def unsubscribe_orderbook(self, market_id: str, outcome: str = "YES") -> None:

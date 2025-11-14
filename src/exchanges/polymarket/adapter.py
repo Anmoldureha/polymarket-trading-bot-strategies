@@ -56,6 +56,8 @@ class PolymarketAdapter(BaseExchange):
                 api_key=self.rest_client.api_key,
                 private_key=getattr(self.rest_client, 'private_key', None)
             )
+            # Provide rest_client reference for fetching asset_ids
+            self.ws_client.rest_client = self.rest_client
             
             def on_orderbook_update(market_id, outcome, bids, asks):
                 logger.debug(f"Orderbook update: {market_id} {outcome}")
@@ -99,8 +101,8 @@ class PolymarketAdapter(BaseExchange):
             if cached:
                 return cached
             
-            # Subscribe and wait
-            self.ws_client.subscribe_orderbook(market_id, outcome)
+            # Subscribe and wait (pass rest_client to get asset_ids)
+            self.ws_client.subscribe_orderbook(market_id, outcome, rest_client=self.rest_client)
             import time
             time.sleep(0.5)
             cached = self.ws_client.get_orderbook(market_id, outcome)
