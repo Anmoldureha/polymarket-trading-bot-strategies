@@ -384,6 +384,44 @@ class TradingBot:
             except Exception as e:
                 logger.debug(f"Error checking stop loss for {position_id}: {e}")
     
+    def _send_status_update(self, start_time: float) -> None:
+        """Send periodic status update via Telegram"""
+        if not self.telegram or not self.telegram.chat_id:
+            return
+        
+        try:
+            # Calculate uptime
+            uptime_seconds = time.time() - start_time
+            uptime_minutes = uptime_seconds / 60
+            
+            # Get WebSocket status
+            ws_status = "❌ Disconnected"
+            if hasattr(self.polymarket_client, 'ws_client') and self.polymarket_client.ws_client:
+                if self.polymarket_client.ws_client.is_connected():
+                    ws_status = "✅ Connected"
+                else:
+                    ws_status = "⚠️  Reconnecting"
+            
+            # Get metrics
+            metrics = self.profitability_tracker.get_metrics()
+            
+            # Prepare status stats
+            stats = {
+                'uptime_minutes': uptime_minutes,
+                'total_trades': self.total_trades,
+                'total_pnl': metrics.get('total_pnl', 0.0),
+                'active_strategies': list(self.strategies.keys()),
+                'websocket_status': ws_status,
+                'iteration_count': self.iteration_count
+            }
+            
+            # Send status update
+            self.telegram.send_status_update(stats)
+            logger.info(f"Sent status update: {uptime_minutes:.0f} min uptime, {self.total_trades} trades")
+        
+        except Exception as e:
+            logger.error(f"Error sending status update: {e}", exc_info=True)
+    
     def _log_risk_metrics(self) -> None:
         """Log current risk metrics and profitability (file only, not terminal)"""
         metrics = self.risk_manager.get_risk_metrics()
@@ -428,15 +466,28 @@ class TradingBot:
         # Get polling interval from config
         polling_interval = self.config.get('polling_interval', 5.0)  # Default 5 seconds
         
+        # Status update interval (30 minutes)
+        status_update_interval = 30 * 60  # 30 minutes in seconds
+        last_status_update = time.time()
+        start_time = time.time()
+        
         try:
             while self.running:
-                start_time = time.time()
+                iteration_start = time.time()
                 
                 # Run trading iteration
                 trades = self.run_iteration()
                 
+                # Check if it's time for status update (every 30 minutes)
+                current_time = time.time()
+                time_since_last_status = current_time - last_status_update
+                
+                if time_since_last_status >= status_update_interval:
+                    self._send_status_update(start_time)
+                    last_status_update = current_time
+                
                 # Sleep until next iteration
-                elapsed = time.time() - start_time
+                elapsed = time.time() - iteration_start
                 sleep_time = max(0, polling_interval - elapsed)
                 
                 if sleep_time > 0:

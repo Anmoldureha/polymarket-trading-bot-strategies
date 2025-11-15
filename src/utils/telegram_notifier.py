@@ -151,6 +151,44 @@ class TelegramNotifier:
         message += f"📊 Monitoring markets..."
         return self.send_message(message)
     
+    def send_status_update(self, stats: dict) -> bool:
+        """
+        Send periodic status update.
+        
+        Args:
+            stats: Dictionary with bot statistics:
+                - uptime_minutes: Bot uptime in minutes
+                - total_trades: Total trades executed
+                - total_pnl: Total profit/loss
+                - active_strategies: List of active strategies
+                - websocket_status: WebSocket connection status
+                - iteration_count: Number of iterations
+                
+        Returns:
+            True if sent successfully
+        """
+        uptime = stats.get('uptime_minutes', 0)
+        trades = stats.get('total_trades', 0)
+        pnl = stats.get('total_pnl', 0.0)
+        strategies = stats.get('active_strategies', [])
+        ws_status = stats.get('websocket_status', 'Unknown')
+        iterations = stats.get('iteration_count', 0)
+        
+        message = f"📊 <b>Bot Status Update</b>\n\n"
+        message += f"⏱️  Uptime: {uptime:.0f} minutes\n"
+        message += f"🔄 Iterations: {iterations:,}\n"
+        message += f"💼 Trades: {trades}\n"
+        message += f"💰 P&L: ${pnl:.2f}\n"
+        message += f"📡 WebSocket: {ws_status}\n"
+        message += f"✅ Strategies: {len(strategies)} active\n"
+        
+        if strategies:
+            message += f"   • {', '.join(strategies[:5])}"
+            if len(strategies) > 5:
+                message += f" +{len(strategies) - 5} more"
+        
+        return self.send_message(message)
+    
     def trade_executed(self, strategy: str, market_id: str, details: dict) -> bool:
         """Notify that a trade was executed"""
         message = f"🎯 <b>Trade Executed</b>\n\n"
