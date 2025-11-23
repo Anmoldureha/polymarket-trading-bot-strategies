@@ -109,16 +109,21 @@ class PolymarketRESTClient:
             logger.error(f"Error fetching markets: {e}", exc_info=True)
             return []
     
-    def get_orderbook(self, market_id: str, outcome: str = "YES") -> Dict:
-        """Get orderbook"""
+    def get_orderbook(self, token_id: str, outcome: str = "YES") -> Dict:
+        """Get orderbook for a token
+        
+        Args:
+            token_id: Token ID (not market ID or condition ID)
+            outcome: Outcome name (for logging/reference only)
+        """
         endpoint = "/book"
-        params = {'market': market_id, 'outcome': outcome}
+        params = {'token_id': token_id}
         
         try:
             response = self._request('GET', endpoint, params=params)
             
             if self.verbose_validation:
-                self.validator.log_response_sample(response, f"{endpoint}?market={market_id}&outcome={outcome}")
+                self.validator.log_response_sample(response, f"{endpoint}?token_id={token_id}")
             
             is_valid, error_msg, orderbook = self.validator.validate_orderbook_response(response)
             

@@ -70,35 +70,48 @@ class SpreadScalpingStrategy(BaseStrategy):
             markets = self.polymarket_client.get_markets(active=True, limit=100)
             
             for market in markets:
-                market_id = market.get('id') or market.get('market_id')
+                market_id = market.get('condition_id') or market.get('id') or market.get('market_id')
                 if not market_id or market_id in self.active_markets:
                     continue
                 
                 # Filter by Volume/Liquidity
-                volume = float(market.get('volume', 0) or 0)
-                if volume < self.min_liquidity:
+                # Temporarily disabled to test rest of logic
+                # volume = float(market.get('volume', 0) or 0)
+                # if volume < self.min_liquidity:
+                #     continue
+                
+                # Filter by market status - must be accepting orders and not closed
+                if not market.get('enable_order_book', False):
+                    continue
+                if not market.get('accepting_orders', False):
+                    continue
+                if market.get('closed', False):
                     continue
                 
                 # Filter by Expiration
-                if not self._check_expiration(market.get('endDate')):
+                end_date = market.get('end_date_iso') or market.get('endDate')
+                if not self._check_expiration(end_date):
                     continue
                 
-                # Check Prices & Spread
-                try:
-                    outcomes = json.loads(market.get('outcomes', '["YES", "NO"]')) if isinstance(market.get('outcomes'), str) else market.get('outcomes', ["YES", "NO"])
-                except Exception:
-                    outcomes = ["YES", "NO"]
+                # Get token IDs from market data
+                tokens = market.get('tokens', [])
+                if not tokens or len(tokens) < 2:
+                    continue
                 
                 # Optimization: Only check price if volume/expiry passed
                 try:
-                    # Check YES outcome
-                    price_info = self.polymarket_client.get_best_price(market_id, outcome="YES")
-                    if self._analyze_opportunity(market_id, "YES", price_info, opportunities):
-                        continue # Found opportunity in this market
+                    # Check each token (usually YES and NO)
+                    for token in tokens:
+                        token_id = token.get('token_id')
+                        outcome = token.get('outcome', 'UNKNOWN')
                         
-                    # Check NO outcome
-                    price_info_no = self.polymarket_client.get_best_price(market_id, outcome="NO")
-                    self._analyze_opportunity(market_id, "NO", price_info_no, opportunities)
+                        if not token_id:
+                            continue
+                        
+                        # Get orderbook using token_id
+                        price_info = self.polymarket_client.get_best_price(token_id, outcome=outcome)
+                        if self._analyze_opportunity(market_id, outcome, price_info, opportunities):
+                            break # Found opportunity in this market
                     
                 except Exception as e:
                     logger.debug(f"Error checking price for {market_id}: {e}")

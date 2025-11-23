@@ -478,8 +478,8 @@ class TradingBot:
         # Get polling interval from config
         polling_interval = self.config.get('polling_interval', 5.0)  # Default 5 seconds
         
-        # Status update interval (30 minutes)
-        status_update_interval = 30 * 60  # 30 minutes in seconds
+        # Status update interval (15 minutes)
+        status_update_interval = 15 * 60  # 15 minutes in seconds
         last_status_update = time.time()
         start_time = time.time()
         
