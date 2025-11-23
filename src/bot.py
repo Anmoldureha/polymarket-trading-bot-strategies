@@ -22,6 +22,7 @@ from .strategies.liquidity import LiquidityStrategy
 from .strategies.single_arbitrage import SingleArbitrageStrategy
 from .strategies.low_volume_spread import LowVolumeSpreadStrategy
 from .strategies.market_making import MarketMakingStrategy
+from .strategies.spread_scalping import SpreadScalpingStrategy
 from .utils.logger import setup_logger, get_trade_logger, get_error_logger
 from .utils.config_loader import ConfigLoader
 from .utils.profitability_tracker import ProfitabilityTracker, TradeRecord
@@ -224,6 +225,17 @@ class TradingBot:
                 polymarket_client=self.polymarket_client,
                 risk_manager=self.risk_manager,
                 config=market_making_config,
+                market_cache=self.market_cache
+            )
+        
+        # Spread Scalping Strategy
+        spread_scalping_config = self.config_loader.get_strategy_config('spread_scalping')
+        if spread_scalping_config.get('enabled', False):
+            self.strategies['spread_scalping'] = SpreadScalpingStrategy(
+                name='spread_scalping',
+                polymarket_client=self.polymarket_client,
+                risk_manager=self.risk_manager,
+                config=spread_scalping_config,
                 market_cache=self.market_cache
             )
         
@@ -485,6 +497,14 @@ class TradingBot:
                 if time_since_last_status >= status_update_interval:
                     self._send_status_update(start_time)
                     last_status_update = current_time
+                
+                # Periodically check for Telegram chat ID if not set
+                if self.telegram and not self.telegram.chat_id and self.iteration_count % 12 == 0: # Every ~1 minute (assuming 5s interval)
+                    chat_id = self.telegram.check_for_updates()
+                    if chat_id:
+                        trade_logger.info(f"✅ Telegram chat ID detected: {chat_id}")
+                        strategy_names = list(self.strategies.keys())
+                        self.telegram.bot_started(strategy_names)
                 
                 # Sleep until next iteration
                 elapsed = time.time() - iteration_start

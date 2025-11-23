@@ -124,3 +124,14 @@ strategies:
     outcome: "YES"  # Outcome to trade (YES or NO)
     min_order_size: 1.0  # Minimum order size in USDC
 
+
+  # Strategy 7: Spread Scalping
+  # Scalps spreads on liquid markets with >3 days to expiry
+  spread_scalping:
+    enabled: true
+    min_spread_cents: 0.03
+    min_liquidity: 10000.0
+    min_days_to_expiry: 3
+    likely_outcome_threshold: 0.70
+    order_size_usdc: 10.0
+    max_positions: 5
