@@ -85,8 +85,19 @@ class PolymarketAdapter(BaseExchange):
         return True
     
     def get_markets(self, active: bool = True, limit: int = 100) -> List[Dict]:
-        """Get markets - always uses REST"""
-        return self.rest_client.get_markets(active=active, limit=limit)
+        """Get markets - always uses REST
+        
+        Args:
+            active: Filter for active markets
+            limit: Max number of markets to return (uses pagination if > 1000)
+        """
+        if limit <= 1000:
+            # Single page request
+            result = self.rest_client.get_markets(active=active, limit=limit)
+            return result['markets']
+        else:
+            # Multi-page request
+            return self.rest_client.get_all_markets(active=active, max_markets=limit)
     
     def get_market(self, market_id: str) -> Dict:
         """Get market details - always uses REST"""

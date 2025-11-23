@@ -66,8 +66,8 @@ class SpreadScalpingStrategy(BaseStrategy):
             if len(self.active_markets) >= self.max_positions:
                 return opportunities
 
-            # 2. Scan for New Markets
-            markets = self.polymarket_client.get_markets(active=True, limit=100)
+            # 2. Scan for New Markets (fetch all active markets using pagination)
+            markets = self.polymarket_client.get_markets(active=True, limit=10000)
             
             for market in markets:
                 market_id = market.get('condition_id') or market.get('id') or market.get('market_id')

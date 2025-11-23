@@ -87,10 +87,21 @@ class PolymarketRESTClient:
             logger.error(f"API request failed: {method} {endpoint} - {e}")
             raise
     
-    def get_markets(self, active: bool = True, limit: int = 100) -> List[Dict]:
-        """Get list of markets"""
+    def get_markets(self, active: bool = True, limit: int = 100, next_cursor: str = "") -> Dict:
+        """Get list of markets with pagination support
+        
+        Args:
+            active: Filter for active markets
+            limit: Number of markets per page (max 1000)
+            next_cursor: Cursor for pagination (empty string for first page)
+            
+        Returns:
+            Dict with 'markets' list and 'next_cursor' for pagination
+        """
         endpoint = "/markets"
         params = {'active': active, 'limit': limit}
+        if next_cursor:
+            params['next_cursor'] = next_cursor
         
         try:
             response = self._request('GET', endpoint, params=params)
@@ -102,12 +113,57 @@ class PolymarketRESTClient:
             
             if not is_valid:
                 logger.error(f"Invalid markets response: {error_msg}")
-                return []
+                return {'markets': [], 'next_cursor': None}
             
-            return markets or []
+            # Extract next_cursor from response (API returns it in response)
+            next_cursor_value = response.get('next_cursor', None)
+            
+            return {
+                'markets': markets or [],
+                'next_cursor': next_cursor_value if next_cursor_value != 'LTE=' else None
+            }
         except Exception as e:
             logger.error(f"Error fetching markets: {e}", exc_info=True)
-            return []
+            return {'markets': [], 'next_cursor': None}
+    
+    def get_all_markets(self, active: bool = True, max_markets: int = None) -> List[Dict]:
+        """Get all markets using pagination
+        
+        Args:
+            active: Filter for active markets
+            max_markets: Maximum number of markets to fetch (None = all)
+            
+        Returns:
+            List of all markets
+        """
+        all_markets = []
+        next_cursor = ""
+        page = 1
+        
+        while True:
+            logger.info(f"Fetching markets page {page}...")
+            result = self.get_markets(active=active, limit=1000, next_cursor=next_cursor)
+            
+            markets = result['markets']
+            all_markets.extend(markets)
+            
+            logger.info(f"Page {page}: Got {len(markets)} markets (total: {len(all_markets)})")
+            
+            # Check if we've reached max_markets
+            if max_markets and len(all_markets) >= max_markets:
+                all_markets = all_markets[:max_markets]
+                logger.info(f"Reached max_markets limit: {max_markets}")
+                break
+            
+            # Check if there are more pages
+            next_cursor = result['next_cursor']
+            if not next_cursor:
+                logger.info(f"No more pages. Total markets: {len(all_markets)}")
+                break
+            
+            page += 1
+        
+        return all_markets
     
     def get_orderbook(self, token_id: str, outcome: str = "YES") -> Dict:
         """Get orderbook for a token

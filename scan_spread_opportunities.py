@@ -76,8 +76,8 @@ def scan_markets():
                 print(f"   🔍 Active markets at start: {len(strategy.active_markets)}")
                 print(f"   🔍 Max positions: {strategy.max_positions}")
                 
-                markets = strategy.polymarket_client.get_markets(active=True, limit=100)
-                print(f"   📊 Fetched {len(markets)} active markets from Polymarket API")
+                markets = strategy.polymarket_client.get_markets(active=True, limit=10000)
+                print(f"   📊 Fetched {len(markets)} active markets from Polymarket API (using pagination)")
                 
                 if markets:
                     print(f"\n   🔍 First market ALL keys: {list(markets[0].keys())}")
