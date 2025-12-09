@@ -50,7 +50,12 @@ class MarketCache:
             
             # Fetch fresh markets
             try:
-                markets = self.polymarket_client.get_markets(active=active, limit=limit)
+                result = self.polymarket_client.get_markets(active=active, limit=limit)
+                # The client may return a list or a dict with 'markets' key (pagination)
+                if isinstance(result, dict):
+                    markets = result.get('markets', [])
+                else:
+                    markets = result
                 if markets:
                     self._markets_cache = markets
                     self._cache_timestamp = current_time

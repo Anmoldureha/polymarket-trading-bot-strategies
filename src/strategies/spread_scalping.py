@@ -36,18 +36,25 @@ class SpreadScalpingStrategy(BaseStrategy):
         super().__init__(*args, **kwargs)
         
         # Configuration
-        self.min_spread_cents = self.config.get('min_spread_cents', 0.03)
-        self.min_liquidity = self.config.get('min_liquidity', 10000.0) # Minimum volume
-        self.min_days_to_expiry = self.config.get('min_days_to_expiry', 3)
-        self.likely_outcome_threshold = self.config.get('likely_outcome_threshold', 0.70) # 70% probability
+        self.min_spread_cents = self.config.get('min_spread_cents', 0.01)  # lowered for testing
+        self.min_liquidity = self.config.get('min_liquidity', 5000.0)  # lowered liquidity threshold for testing
+        self.min_days_to_expiry = self.config.get('min_days_to_expiry', 2)  # allow nearer expiries
+        self.likely_outcome_threshold = self.config.get('likely_outcome_threshold', 0.60)  # lowered probability threshold for testing
         self.order_size_usdc = self.config.get('order_size_usdc', 10.0)
         self.max_positions = self.config.get('max_positions', 5)
         
+        # Rotating scan configuration
+        self.markets_per_scan = self.config.get('markets_per_scan', 1000)  # Markets to check per iteration
+        self.full_scan_interval = self.config.get('full_scan_interval', 10)  # Full scan every N iterations
+        
         # State
         self.active_markets = set() # Markets we are currently trading
+        self.scan_cursor = ""  # Cursor for rotating through markets
+        self.scan_iteration = 0  # Track iterations for full scans
         
         logger.info(f"[{self.name}] Initialized Spread Scalping Strategy")
         logger.info(f"Config: Min Spread: ${self.min_spread_cents}, Min Vol: ${self.min_liquidity}")
+        logger.info(f"Rotating scan: {self.markets_per_scan} markets/iteration, full scan every {self.full_scan_interval} iterations")
 
     def scan_opportunities(self) -> List[Dict]:
         """
@@ -66,8 +73,33 @@ class SpreadScalpingStrategy(BaseStrategy):
             if len(self.active_markets) >= self.max_positions:
                 return opportunities
 
-            # 2. Scan for New Markets (fetch all active markets using pagination)
-            markets = self.polymarket_client.get_markets(active=True, limit=10000)
+            # 2. Scan for New Markets using rotating pagination
+            self.scan_iteration += 1
+            
+            # Every N iterations, do a full reset to catch new markets
+            if self.scan_iteration % self.full_scan_interval == 0:
+                self.scan_cursor = ""
+                logger.info(f"[{self.name}] Full scan reset (iteration {self.scan_iteration})")
+            
+            # Fetch one page of markets using cursor
+            result = self.polymarket_client.get_markets(
+                active=True, 
+                limit=self.markets_per_scan,
+                next_cursor=self.scan_cursor
+            )
+            
+            markets = result['markets']
+            next_cursor = result['next_cursor']
+            
+            logger.info(f"[{self.name}] Scanning {len(markets)} markets (cursor: {self.scan_cursor[:20] if self.scan_cursor else 'start'}...)")
+            
+            # Update cursor for next iteration
+            if next_cursor:
+                self.scan_cursor = next_cursor
+            else:
+                # Reached end, reset to beginning
+                self.scan_cursor = ""
+                logger.info(f"[{self.name}] Reached end of markets, resetting cursor")
             
             for market in markets:
                 market_id = market.get('condition_id') or market.get('id') or market.get('market_id')
@@ -137,14 +169,14 @@ class SpreadScalpingStrategy(BaseStrategy):
     def _analyze_opportunity(self, market_id: str, outcome: str, price_info: Dict, opportunities: List[Dict]) -> bool:
         """Analyze a specific outcome for spread and probability"""
         if not price_info:
-            print(f"DEBUG: {market_id} {outcome} - No price info")
-            return False
-            
+            logger.debug(f"DEBUG: {market_id} {outcome} - No price info")
+        return False
+
         bid = float(price_info.get('bid') or 0)
         ask = float(price_info.get('ask') or 0)
         
         if bid == 0 or ask == 0:
-            print(f"DEBUG: {market_id} {outcome} - Zero bid/ask: {bid}/{ask}")
+            logger.debug(f"DEBUG: {market_id} {outcome} - Zero bid/ask: {bid}/{ask}")
             return False
             
         spread = ask - bid
@@ -152,12 +184,12 @@ class SpreadScalpingStrategy(BaseStrategy):
         
         # Check Probability (using Mid Price as proxy)
         if mid_price < self.likely_outcome_threshold:
-            print(f"DEBUG: {market_id} {outcome} - Low prob: {mid_price} < {self.likely_outcome_threshold}")
+            logger.debug(f"DEBUG: {market_id} {outcome} - Low prob: {mid_price} < {self.likely_outcome_threshold}")
             return False
             
         # Check Spread
         if spread < self.min_spread_cents:
-            print(f"DEBUG: {market_id} {outcome} - Low spread: {spread} < {self.min_spread_cents}")
+            logger.debug(f"DEBUG: {market_id} {outcome} - Low spread: {spread} < {self.min_spread_cents}")
             return False
             
         # Found a candidate!

@@ -23,6 +23,8 @@ from .strategies.single_arbitrage import SingleArbitrageStrategy
 from .strategies.low_volume_spread import LowVolumeSpreadStrategy
 from .strategies.market_making import MarketMakingStrategy
 from .strategies.spread_scalping import SpreadScalpingStrategy
+from .strategies.tail_end_strategy import TailEndStrategy
+from .strategies.combinatorial_arbitrage import CombinatorialStrategy
 from .utils.logger import setup_logger, get_trade_logger, get_error_logger
 from .utils.config_loader import ConfigLoader
 from .utils.profitability_tracker import ProfitabilityTracker, TradeRecord
@@ -155,6 +157,9 @@ class TradingBot:
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
+
+        # Initialize start time for uptime calculations
+        self.start_time = time.time()
     
     def _initialize_strategies(self) -> None:
         """Initialize all trading strategies"""
@@ -236,6 +241,28 @@ class TradingBot:
                 polymarket_client=self.polymarket_client,
                 risk_manager=self.risk_manager,
                 config=spread_scalping_config,
+                market_cache=self.market_cache
+            )
+        
+        # Tail-End Strategy
+        tail_end_config = self.config_loader.get_strategy_config('tail_end')
+        if tail_end_config.get('enabled', False):
+            self.strategies['tail_end'] = TailEndStrategy(
+                name='tail_end',
+                polymarket_client=self.polymarket_client,
+                risk_manager=self.risk_manager,
+                config=tail_end_config,
+                market_cache=self.market_cache
+            )
+            
+        # Combinatorial Strategy
+        combinatorial_config = self.config_loader.get_strategy_config('combinatorial')
+        if combinatorial_config.get('enabled', False):
+            self.strategies['combinatorial'] = CombinatorialStrategy(
+                name='combinatorial',
+                polymarket_client=self.polymarket_client,
+                risk_manager=self.risk_manager,
+                config=combinatorial_config,
                 market_cache=self.market_cache
             )
         
@@ -361,7 +388,14 @@ class TradingBot:
         
         # Check stop losses
         self._check_stop_losses()
-        
+
+        # Periodic status update to Telegram every 5 iterations
+        if self.iteration_count % 5 == 0:
+            try:
+                self._send_status_update(self.start_time)
+            except Exception as e:
+                logger.error(f"Failed to send periodic status update: {e}", exc_info=True)
+
         # Log risk metrics periodically (file only, not terminal)
         if self.iteration_count % 10 == 0:
             self._log_risk_metrics()
@@ -405,6 +439,9 @@ class TradingBot:
             # Calculate uptime
             uptime_seconds = time.time() - start_time
             uptime_minutes = uptime_seconds / 60
+
+            # Get risk metrics for P&L
+            metrics = self.risk_manager.get_risk_metrics()
             
             # Get WebSocket status
             ws_status = "❌ Disconnected"
@@ -412,10 +449,7 @@ class TradingBot:
                 if self.polymarket_client.ws_client.is_connected():
                     ws_status = "✅ Connected"
                 else:
-                    ws_status = "⚠️  Reconnecting"
-            
-            # Get metrics
-            metrics = self.profitability_tracker.get_metrics()
+                    ws_status = "❌ Disconnected"
             
             # Prepare status stats
             stats = {

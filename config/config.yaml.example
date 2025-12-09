@@ -135,3 +135,29 @@ strategies:
     likely_outcome_threshold: 0.70
     order_size_usdc: 10.0
     max_positions: 5
+    markets_per_scan: 1000      # Markets to check per iteration (rotating scan)
+    full_scan_interval: 10      # Reset cursor every N iterations to catch new markets
+
+  # Strategy 8: Tail-End Trading (High Probability)
+  # Buy outcomes >$0.93 near expiry (<7 days) for safe returns
+  tail_end:
+    enabled: true
+    min_price: 0.93
+    max_price: 0.98
+    max_days_to_expiry: 7
+    position_size: 50.0  # Safe size for high probability
+    stop_loss: 0.85
+
+  # Strategy 9: Combinatorial Arbitrage (Correlated Markets)
+  # Detect divergences between logically linked markets
+  combinatorial:
+    enabled: true
+    divergence_threshold: 0.10  # 10% price difference triggers alert
+    keywords:
+      - "Bitcoin"
+      - "Ethereum"
+      - "Solana"
+      - "Trump"
+      - "Biden"
+      - "Fed Rate"
+

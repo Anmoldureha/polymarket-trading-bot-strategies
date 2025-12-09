@@ -66,6 +66,7 @@ class MarketMakingStrategy(BaseStrategy):
         self.market_id = self.config.get('market_id')  # Specific market to trade (optional)
         self.outcome = self.config.get('outcome', 'YES')  # Outcome to trade
         self.min_order_size = self.config.get('min_order_size', 1.0)  # Minimum order size
+        self.max_age_hours = self.config.get('max_age_hours', 24) # Target new markets (default <24h)
         
         # Track our orders per market
         self.market_orders: Dict[str, Dict[str, List[OrderInBand]]] = {}  # market_id -> side -> orders
@@ -150,6 +151,9 @@ class MarketMakingStrategy(BaseStrategy):
                 logger.warning(f"  [{self.name}] get_markets returned non-list: {type(markets)}")
                 return []
             
+            from datetime import datetime
+            import dateutil.parser
+            
             for market in markets:
                 if not isinstance(market, dict):
                     continue
@@ -157,6 +161,25 @@ class MarketMakingStrategy(BaseStrategy):
                 market_id = market.get('id') or market.get('market_id')
                 if not market_id:
                     continue
+                    
+                # Filter by age if available and configured
+                if self.max_age_hours > 0 and self.market_id is None: # Only filter if not targeting specific market
+                    created_at = market.get('created_at') or market.get('createdAt')
+                    # Note: API might not return createdAt in list view. 
+                    # If start_date is available (often same as created for some markets), use that.
+                    start_date = market.get('startDate') or market.get('start_date_iso')
+                    
+                    check_date = created_at or start_date
+                    if check_date:
+                        try:
+                            dt = dateutil.parser.parse(check_date).replace(tzinfo=None)
+                            now = datetime.utcnow()
+                            age_hours = (now - dt).total_seconds() / 3600
+                            if age_hours > self.max_age_hours:
+                                continue # Too old
+                        except:
+                            pass # If can't parse, ignore filter (safe fallback)
+                
                 
                 try:
                     # Get current market price

@@ -84,13 +84,22 @@ class PolymarketAdapter(BaseExchange):
             return self.ws_client is not None and self.ws_client.is_connected()
         return True
     
-    def get_markets(self, active: bool = True, limit: int = 100) -> List[Dict]:
+    def get_markets(self, active: bool = True, limit: int = 100, next_cursor: str = "") -> any:
         """Get markets - always uses REST
         
         Args:
             active: Filter for active markets
             limit: Max number of markets to return (uses pagination if > 1000)
+            next_cursor: Cursor for pagination (returns dict with cursor if provided)
+            
+        Returns:
+            List[Dict] if next_cursor is empty, otherwise Dict with 'markets' and 'next_cursor'
         """
+        # If cursor is provided, return dict format for pagination
+        if next_cursor or next_cursor == "":
+            return self.rest_client.get_markets(active=active, limit=limit, next_cursor=next_cursor)
+        
+        # Legacy behavior: return list
         if limit <= 1000:
             # Single page request
             result = self.rest_client.get_markets(active=active, limit=limit)
