@@ -6,7 +6,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-active-success.svg)
 
-**An advanced algorithmic trading bot for Polymarket prediction markets with 5 sophisticated trading strategies**
+**An advanced algorithmic trading bot for Polymarket prediction markets with 8 sophisticated trading strategies**
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Strategies](#-strategies) • [Documentation](#-documentation) • [Contributing](#-contributing)
 
@@ -33,11 +33,11 @@
 
 ## 🎯 Overview
 
-**PolyHFT** is a professional-grade high-frequency trading bot designed for Polymarket, the world's largest prediction market platform. The bot implements six distinct trading strategies (including 1 beta) that capitalize on market inefficiencies, arbitrage opportunities, and liquidity provision rewards.
+**PolyHFT** is a professional-grade high-frequency trading bot designed for Polymarket, the world's largest prediction market platform. The bot implements eight distinct trading strategies (including 1 beta) that capitalize on market inefficiencies, arbitrage opportunities, and liquidity provision rewards.
 
 ### Key Highlights
 
-- 🚀 **6 Advanced Strategies** (1 beta): Hedging, micro-spreads, liquidity provision, arbitrage, low-volume opportunities, and continuous market-making [BETA]
+- 🚀 **8 Advanced Strategies** (1 beta): Hedging, micro-spreads, liquidity provision, arbitrage, low-volume opportunities, tail-end trading, combinatorial arbitrage, spread scalping and continuous market-making [BETA]
 - 🛡️ **Enterprise Risk Management**: Multi-layered risk controls with position limits, stop-losses, and drawdown protection
 - 📊 **Paper Trading Mode**: Test strategies safely with simulated trading before risking real capital
 - ⚡ **High Performance**: Parallel market fetching, intelligent caching, and optimized API usage
@@ -123,7 +123,31 @@
 - Guaranteed profit: Sum of limit orders > 100¢
 - **Best for**: Small traders (whales can't access these markets)
 
-### 6. Continuous Market Making 📊 [BETA]
+### 6. Spread Scalping ⚡
+**High-frequency spread capture**
+
+- Scans for liquid markets with wide spreads (3-5 cents)
+- Places limit buy orders on likely outcome
+- Automatically flips to sell to capture spread
+- **Best for**: Active markets with decent volume
+
+### 7. Tail-End Trading 🏁
+**High-probability outcomes near resolution**
+
+- Buys outcomes priced >$0.93 near expiry (<7 days)
+- Capitalizes on "certain" events offering 2-7% returns
+- Protected by strict stop-loss and diversification
+- **Best for**: Consistent, low-risk yield farming
+
+### 8. Combinatorial Arbitrage 🔗
+**Exploiting correlated market discrepancies**
+
+- Detects logical contradictions between linked markets
+- Monitors keyword-grouped markets (e.g., "Bitcoin") for price divergence
+- Signals opportunities when related markets trade at vastly different probabilities
+- **Best for**: Sophisticated arbitrage across the platform
+
+### 9. Continuous Market Making 📊 [BETA]
 **Band-based order management around market price**
 
 ⚠️ **BETA STATUS**: This strategy is under evaluation. Use with caution and monitor closely.
