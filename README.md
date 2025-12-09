@@ -6,7 +6,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-active-success.svg)
 
-**An advanced algorithmic trading bot for Polymarket prediction markets with 8 sophisticated trading strategies**
+**An advanced algorithmic trading bot for Polymarket prediction markets with 10 sophisticated trading strategies**
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Strategies](#-strategies) • [Documentation](#-documentation) • [Contributing](#-contributing)
 
@@ -33,11 +33,11 @@
 
 ## 🎯 Overview
 
-**PolyHFT** is a professional-grade high-frequency trading bot designed for Polymarket, the world's largest prediction market platform. The bot implements eight distinct trading strategies (including 1 beta) that capitalize on market inefficiencies, arbitrage opportunities, and liquidity provision rewards.
+**PolyHFT** is a professional-grade high-frequency trading bot designed for Polymarket, the world's largest prediction market platform. The bot implements 10 distinct trading strategies (including 1 beta) that capitalize on market inefficiencies, arbitrage opportunities, and liquidity provision rewards.
 
 ### Key Highlights
 
-- 🚀 **8 Advanced Strategies** (1 beta): Hedging, micro-spreads, liquidity provision, arbitrage, low-volume opportunities, tail-end trading, combinatorial arbitrage, spread scalping and continuous market-making [BETA]
+- 🚀 **10 Advanced Strategies** (1 beta): Hedging, micro-spreads, liquidity provision, single-market arbitrage, low-volume opportunities, spread scalping, tail-end trading, combinatorial arbitrage, legged arbitrage, and continuous market-making [BETA]
 - 🛡️ **Enterprise Risk Management**: Multi-layered risk controls with position limits, stop-losses, and drawdown protection
 - 📊 **Paper Trading Mode**: Test strategies safely with simulated trading before risking real capital
 - ⚡ **High Performance**: Parallel market fetching, intelligent caching, and optimized API usage
