@@ -161,3 +161,14 @@ strategies:
       - "Biden"
       - "Fed Rate"
 
+  # Strategy 10: Legged Arbitrage (Directional Scalping)
+  # Buy cheap leg (e.g. 25c), wait, buy other leg to lock profit (e.g. at 45c -> 70c cost)
+  legged_arbitrage:
+    enabled: true
+    keywords: ["Bitcoin", "BTC"]
+    entry_max_price: 0.30     # Only buy legs cheaper than this
+    max_total_cost: 0.95      # Hedge when Leg1 + Leg2 < 0.95
+    position_size: 10.0
+    stop_loss_pct: 0.20       # Sell Leg1 if price drops 20%
+    max_concurrent_positions: 3
+

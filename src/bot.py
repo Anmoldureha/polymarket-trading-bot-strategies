@@ -25,6 +25,7 @@ from .strategies.market_making import MarketMakingStrategy
 from .strategies.spread_scalping import SpreadScalpingStrategy
 from .strategies.tail_end_strategy import TailEndStrategy
 from .strategies.combinatorial_arbitrage import CombinatorialStrategy
+from .strategies.legged_arbitrage import LeggedArbitrageStrategy
 from .utils.logger import setup_logger, get_trade_logger, get_error_logger
 from .utils.config_loader import ConfigLoader
 from .utils.profitability_tracker import ProfitabilityTracker, TradeRecord
@@ -263,6 +264,17 @@ class TradingBot:
                 polymarket_client=self.polymarket_client,
                 risk_manager=self.risk_manager,
                 config=combinatorial_config,
+                market_cache=self.market_cache
+            )
+            
+        # Legged Arbitrage Strategy
+        legged_config = self.config_loader.get_strategy_config('legged_arbitrage')
+        if legged_config.get('enabled', False):
+            self.strategies['legged_arbitrage'] = LeggedArbitrageStrategy(
+                name='legged_arbitrage',
+                polymarket_client=self.polymarket_client,
+                risk_manager=self.risk_manager,
+                config=legged_config,
                 market_cache=self.market_cache
             )
         

@@ -157,7 +157,15 @@
 - Intelligent cancellation logic for inner/outer/middle bands
 - Automatic order placement to maintain target amounts
 - **Best for**: Advanced traders comfortable with continuous order management
-- **Status**: Under evaluation - results may vary
+### 10. Legged Arbitrage 🦵
+**Directional Scalping / Time-Separated Arbitrage**
+
+- **Phase 1 (Entry)**: Buy a low-priced outcome (e.g., NO @ 25¢) in a volatile market.
+- **Phase 2 (Wait)**: Hold and monitor the opposing outcome.
+- **Phase 3 (Hedge)**: Buy the opposing outcome when it becomes cheap (e.g., YES @ 45¢).
+- **Result**: Own YES+NO for 70¢. Guaranteed $1.00 payout = 30¢ risk-free profit.
+- **Best for**: Volatile markets (e.g., crypto prices) where sentiment flips.
+
 
 ---
 
